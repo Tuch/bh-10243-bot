@@ -1,0 +1,73 @@
+# bh-10243-bot
+
+A tiny, self-contained **Telegram push-bot** that delivers a Berghain digest from
+public Reddit RSS feeds — no LLM, no API keys, no always-on process required.
+It runs as a dedicated [Hermes](https://hermes-agent.nousresearch.com) profile.
+
+Two scheduled jobs deliver to the bot:
+
+| Job | Schedule | Content |
+|-----|----------|---------|
+| `bh_daily`  | every day, 09:00       | 🔥 **Hot today** (top of the last 24h) + 🆕 **New** (since yesterday) |
+| `bh_weekly` | Mondays, 09:00         | 🔥 **Hot this week** (top of the last 7 days) |
+
+Titles are clickable markdown links (raw URLs hidden), link previews are
+suppressed, and a run with nothing new stays silent (no message).
+
+## How it works
+
+- **Source:** Reddit's public `.rss` feeds (the JSON API is blocked for anonymous
+  clients; RSS returns 200). Global search for `berghain` + `r/Berghain`.
+- **No LLM:** the cron jobs run in `--no-agent` mode — the script's stdout *is*
+  the message. Zero tokens, works even with no model configured.
+- **Dedup:** the daily job records shown post IDs in
+  `~/.hermes/state/berghain_reddit_seen.json` so mornings only surface new posts.
+- **Rate-limit safe:** feeds are spaced (35s) and retried on HTTP 429 — Reddit
+  throttles hard, so a run can take a couple of minutes (fine for a daily cron).
+
+## Files
+
+```
+config.yaml                     # profile config: no cron header, no link previews
+scripts/berghain_common.py      # shared fetch/render logic
+scripts/berghain-daily.py       # entry: run("daily")
+scripts/berghain-weekly.py      # entry: run("weekly")
+launchd/…plist.template         # macOS timer for the no-gateway setup
+.env.example                    # bot token + chat id (fill in, never commit)
+setup.sh                        # one-command install into a Hermes profile
+```
+
+## Quick start
+
+```bash
+git clone git@github.com:Tuch/bh-10243-bot.git
+cd bh-10243-bot
+./setup.sh                      # creates the 'berghain' profile, installs files
+# edit the printed .env path with your @BotFather token + chat id, then:
+./setup.sh                      # re-run to create the cron jobs
+```
+
+Then pick a scheduler (the script prints both):
+
+- **Any OS:** `hermes -p berghain gateway start` — the profile gateway has a
+  built-in cron ticker.
+- **macOS, no daemon:** install the launchd template — it fires
+  `hermes -p berghain cron tick` at 09:00 (the tick runs whichever job is due).
+
+### Get your chat id
+
+Message your new bot once (press **Start**), then:
+
+```bash
+curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" \
+  | grep -o '"chat":{"id":[0-9]*' | head -1
+```
+
+Put that number in `.env` as `TELEGRAM_HOME_CHANNEL`.
+
+## Customizing
+
+- **Topic:** edit the feed URLs / `q=berghain` in `scripts/berghain_common.py`.
+- **Times:** `hermes -p berghain cron edit <job_id> --schedule "0 8 * * *"`.
+- **Counts:** `HOT_LIMIT` and the `_fetch_hot(...)` limits in `berghain_common.py`.
+- **Test a job now:** `hermes -p berghain cron run bh_daily`.

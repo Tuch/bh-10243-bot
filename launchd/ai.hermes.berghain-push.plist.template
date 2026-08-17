@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS launchd timer for the lightweight (no persistent gateway) setup.
+  Replace __HOME__ with your home dir (e.g. /Users/alex) and install with:
+    sed "s|__HOME__|$HOME|g" ai.hermes.berghain-push.plist.template \
+      > ~/Library/LaunchAgents/ai.hermes.berghain-push.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.hermes.berghain-push.plist
+  Fires `hermes -p berghain cron tick` daily at 09:00; the tick runs whichever
+  job is due (daily every day, weekly on Mondays). No gateway process stays up.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.hermes.berghain-push</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.local/bin/hermes</string>
+        <string>-p</string>
+        <string>berghain</string>
+        <string>cron</string>
+        <string>tick</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>PATH</key>
+        <string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>__HOME__/.hermes/profiles/berghain/logs/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.hermes/profiles/berghain/logs/launchd.err.log</string>
+</dict>
+</plist>

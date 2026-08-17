@@ -1,0 +1,6 @@
+cron:
+  wrap_response: false
+platforms:
+  telegram:
+    extra:
+      disable_link_previews: true
