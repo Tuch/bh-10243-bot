@@ -1,5 +1,8 @@
 # bh-10243-bot
 
+[![ci](https://github.com/Tuch/bh-10243-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Tuch/bh-10243-bot/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A tiny, self-contained **Telegram push-bot** that delivers a Berghain digest from
 public Reddit RSS feeds — no LLM, no API keys, no always-on process required.
 It runs as a dedicated [Hermes](https://hermes-agent.nousresearch.com) profile.
@@ -13,6 +16,31 @@ Two scheduled jobs deliver to the bot:
 
 Titles are clickable markdown links (raw URLs hidden), link previews are
 suppressed, and a run with nothing new stays silent (no message).
+
+## Example message
+
+The daily job delivers something like this (titles are clickable links; the raw
+URLs stay hidden, and Telegram's link previews are suppressed):
+
+```
+Berghain on Reddit
+
+🔥 Hot today
+• The new bouncers of Berghain
+  r/Berghain_Community · u/MainCard3207
+• Door nerves despite going many times
+  r/berghain · u/90smikemc
+
+🆕 New (3)
+• Saule Ticket Refund
+  r/berghain · u/Many_Resource_3744
+• Klubnacht 15/16 August — queue live updates
+  r/Berghain_Community · u/BerghAnon
+• Berghain-like scenes in Los Angeles County?
+  r/AskLosAngeles · u/meihoneysk
+```
+
+Nothing new since the last run → no message is sent.
 
 ## How it works
 
