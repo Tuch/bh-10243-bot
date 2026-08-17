@@ -93,6 +93,30 @@ curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" \
 
 Put that number in `.env` as `TELEGRAM_HOME_CHANNEL`.
 
+## Keep the live bot in sync with git (maintainer mode)
+
+On the machine that maintains the bot you can symlink the profile's `scripts/`
+and `config.yaml` straight to a clone of this repo, so git *is* the source of
+truth — no copy step:
+
+```bash
+git clone git@github.com:Tuch/bh-10243-bot.git ~/code/bh-10243-bot
+cd ~/code/bh-10243-bot
+./setup.sh          # first-time: create profile, .env, cron jobs
+./link.sh           # symlink profile scripts/ + config.yaml -> this clone
+```
+
+From then on:
+
+- **Update the running bot:** `git pull` — the next cron run reads the new
+  scripts automatically (no restart).
+- **Publish local edits:** edit files here, then `git add/commit/push`.
+
+`link.sh` is idempotent and backs up any real files it replaces. Hermes' cron
+guard resolves the symlinked `scripts/` dir, so scripts still pass the
+"must live under the profile scripts dir" check. Edit `config.yaml` via git
+rather than `hermes config set`, which would replace the symlink with a file.
+
 ## Customizing
 
 - **Topic:** edit the feed URLs / `q=berghain` in `scripts/berghain_common.py`.
