@@ -82,16 +82,35 @@ Then pick a scheduler (the script prints both):
 - **macOS, no daemon:** install the launchd template — it fires
   `hermes -p berghain cron tick` at 09:00 (the tick runs whichever job is due).
 
-### Get your chat id
+### Where it delivers
 
-Message your new bot once (press **Start**), then:
+This is a **one-way push bot**, not an interactive one. It never listens for
+messages and does **not** post to whatever chat it happens to be added to — it
+pushes only to the chat id configured on each job (`--deliver`) and in
+`TELEGRAM_HOME_CHANNEL`. Adding the bot to another group changes nothing until
+you point a job at that group's id.
+
+**Find the target chat id** — message the bot (DM) or add it to the group and
+send any message there, then:
 
 ```bash
 curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" \
-  | grep -o '"chat":{"id":[0-9]*' | head -1
+  | grep -oE '"chat":\{"id":-?[0-9]+' | sort -u
 ```
 
-Put that number in `.env` as `TELEGRAM_HOME_CHANNEL`.
+- **Private chat:** a positive id (e.g. `504423287`).
+- **Group / supergroup:** a **negative** id (e.g. `-1001673099043`). The bot must
+  be a **member** of the group to post there (membership is enough — it doesn't
+  need admin, and the group doesn't need to message it first).
+
+Put the id in `.env` as `TELEGRAM_HOME_CHANNEL`, or target it explicitly:
+
+```bash
+hermes -p berghain cron edit <job_id> --deliver telegram:-1001673099043
+```
+
+To post the same digest to several chats, add one job per target (or a second
+`--deliver`), each pointing at its own chat id.
 
 ## Keep the live bot in sync with git (maintainer mode)
 
