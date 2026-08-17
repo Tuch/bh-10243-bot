@@ -141,6 +141,15 @@ def _fetch_hot(window, limit, max_age_h, errors):
     return hot, links
 
 
+def header(mode):
+    # Tag + date so the digests are easy to find via Telegram search
+    # (e.g. search "#berghain", "#weekly", or "2026-08-17").
+    today = datetime.now().strftime("%Y-%m-%d")
+    if mode == "weekly":
+        return ["Berghain on Reddit · week", f"#berghain #weekly · {today}", ""]
+    return ["Berghain on Reddit", f"#berghain #daily · {today}", ""]
+
+
 def run(mode):
     errors = []
 
@@ -149,7 +158,7 @@ def run(mode):
         hot, _ = _fetch_hot("week", 10, 24 * 10, errors)
         if not hot:
             return   # silent
-        lines = ["Berghain on Reddit · week\n", "\U0001F525 Hot this week"]
+        lines = header("weekly") + ["\U0001F525 Hot this week"]
         for it in hot:
             lines += render(it)
         print("\n".join(lines).rstrip())
@@ -175,7 +184,7 @@ def run(mode):
     if not hot and not new_items:
         return   # silent tick — nothing to say
 
-    lines = ["Berghain on Reddit\n"]
+    lines = header("daily")
     if hot:
         lines.append("\U0001F525 Hot today")
         for it in hot:
