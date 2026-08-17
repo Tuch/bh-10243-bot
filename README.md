@@ -98,15 +98,15 @@ curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" \
   | grep -oE '"chat":\{"id":-?[0-9]+' | sort -u
 ```
 
-- **Private chat:** a positive id (e.g. `504423287`).
-- **Group / supergroup:** a **negative** id (e.g. `-1001673099043`). The bot must
+- **Private chat:** a positive id (e.g. `123456789`).
+- **Group / supergroup:** a **negative** id (e.g. `-1001234567890`). The bot must
   be a **member** of the group to post there (membership is enough — it doesn't
   need admin, and the group doesn't need to message it first).
 
 Put the id in `.env` as `TELEGRAM_HOME_CHANNEL`, or target it explicitly:
 
 ```bash
-hermes -p berghain cron edit <job_id> --deliver telegram:-1001673099043
+hermes -p berghain cron edit <job_id> --deliver telegram:-1001234567890
 ```
 
 To post the same digest to several chats, add one job per target (or a second
