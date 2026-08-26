@@ -106,23 +106,6 @@ def is_recent(updated, hours):
         return True
 
 
-def rel_time(updated):
-    """Compact relative age for the item suffix: 'только что' / '45м' / '3ч' / '2д'."""
-    try:
-        dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
-        secs = (datetime.now(timezone.utc) - dt).total_seconds()
-    except Exception:
-        return ""
-    mins = int(secs // 60)
-    if mins < 1:
-        return "только что"
-    if mins < 60:
-        return f"{mins}м"
-    if mins < 24 * 60:
-        return f"{mins // 60}ч"
-    return f"{mins // (24 * 60)}д"
-
-
 def clip(title):
     title = " ".join(title.split())
     title = title.replace("[", "(").replace("]", ")")   # keep [text](url) intact
@@ -130,11 +113,9 @@ def clip(title):
 
 
 def line(it, prefix):
-    """One clickable line: '<prefix> [title](url) · 3ч'. Author/sub are omitted to
+    """One clickable line: '<prefix> [title](url)'. Author/sub/time are omitted to
     keep the single-subreddit-family digest clean."""
-    age = rel_time(it.get("updated", ""))
-    suffix = f" · {age}" if age else ""
-    return f"{prefix} [{clip(it['title'])}]({it['link']}){suffix}"
+    return f"{prefix} [{clip(it['title'])}]({it['link']})"
 
 
 def _merge_round_robin(per_sub, limit):
