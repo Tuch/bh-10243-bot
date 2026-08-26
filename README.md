@@ -7,45 +7,47 @@ A tiny, self-contained **Telegram push-bot** that delivers a Berghain digest fro
 public Reddit RSS feeds — no LLM, no API keys, no always-on process required.
 It runs as a dedicated [Hermes](https://hermes-agent.nousresearch.com) profile.
 
-Two scheduled jobs deliver to the bot:
+The bot ships two jobs. This deployment delivers the **weekly** roundup on
+Fridays and keeps the daily job paused:
 
-| Job | Schedule | Content |
-|-----|----------|---------|
-| `bh_daily`  | every day, 09:00       | 🔥 **Hot today** (top of the last 24h) + 🆕 **New** (since yesterday) |
-| `bh_weekly` | Mondays, 09:00         | 🔥 **Hot this week** (top of the last 7 days) |
+| Job | Schedule | Content | State |
+|-----|----------|---------|-------|
+| `bh_weekly` | **Fridays, 18:00** | 🔥 **Hot this week** (top of the last 7 days) | on |
+| `bh_daily`  | every day, 09:00   | 🔥 **Hot today** (last 24h) + 🆕 **New** (since last run) | paused |
 
+Both pull only from the Berghain subreddits (see [How it works](#how-it-works)).
 Titles are clickable markdown links (raw URLs hidden), link previews are
-suppressed, and a run with nothing new stays silent (no message).
+suppressed, and a run with nothing to show stays silent (no message).
 
 ## Example message
 
-The daily job delivers something like this (titles are clickable links; the raw
-URLs stay hidden, and Telegram's link previews are suppressed):
+Titles are clickable links (raw URLs hidden, previews suppressed). A 🏛 header
+carries the date + a `#berghain` search tag; **Hot** is a numbered list and the
+daily job adds a bulleted **New** section:
 
 ```
-Berghain on Reddit
+🏛 Berghain on Reddit · 26 Aug
+#berghain #daily
 
 🔥 Hot today
-• The new bouncers of Berghain
-  r/Berghain_Community · u/MainCard3207
-• Door nerves despite going many times
-  r/berghain · u/90smikemc
+1. r/berlintechno 🇩🇪 is looking for moderators — the heartbeat of the world's techno capital
+2. What do you guys do for work as someone who is clubbing every weekend?
+3. Sunday morning was just so good!
 
-🆕 New (3)
-• Saule Ticket Refund
-  r/berghain · u/Many_Resource_3744
-• Klubnacht 15/16 August — queue live updates
-  r/Berghain_Community · u/BerghAnon
-• Berghain-like scenes in Los Angeles County?
-  r/AskLosAngeles · u/meihoneysk
+🆕 New (1)
+• Track id anyone? 🙏
 ```
 
-Nothing new since the last run → no message is sent.
+The weekly job is the same layout under a `🔥 Hot this week` heading. Nothing to
+show → no message is sent.
 
 ## How it works
 
 - **Source:** Reddit's public `.rss` feeds (the JSON API is blocked for anonymous
-  clients; RSS returns 200). Global search for `berghain` + `r/Berghain`.
+  clients; RSS returns 200). Only the Berghain subreddit family —
+  `r/Berghain` + `r/Berghain_Community`. The old global `q=berghain` search was
+  dropped because it dragged in unrelated subs (r/harrystyles, r/BerlinNightlife,
+  …); Hot merges the two subs round-robin since RSS carries no score to rank by.
 - **No LLM:** the cron jobs run in `--no-agent` mode — the script's stdout *is*
   the message. Zero tokens, works even with no model configured.
 - **Dedup:** the daily job records shown post IDs in
@@ -79,8 +81,10 @@ Then pick a scheduler (the script prints both):
 
 - **Any OS:** `hermes -p berghain gateway start` — the profile gateway has a
   built-in cron ticker.
-- **macOS, no daemon:** install the launchd template — it fires
-  `hermes -p berghain cron tick` at 09:00 (the tick runs whichever job is due).
+- **macOS, no daemon:** install the launchd template — it wakes on **Fridays at
+  18:00** and fires `hermes -p berghain cron tick` (the tick runs whichever job
+  is due, i.e. the weekly roundup). Add more `StartCalendarInterval` entries to
+  wake at other times if you re-enable the daily job.
 
 ### Where it delivers
 
@@ -138,7 +142,11 @@ rather than `hermes config set`, which would replace the symlink with a file.
 
 ## Customizing
 
-- **Topic:** edit the feed URLs / `q=berghain` in `scripts/berghain_common.py`.
+- **Topic:** edit the `SUBREDDITS` list in `scripts/berghain_common.py`.
 - **Times:** `hermes -p berghain cron edit <job_id> --schedule "0 8 * * *"`.
-- **Counts:** `HOT_LIMIT` and the `_fetch_hot(...)` limits in `berghain_common.py`.
-- **Test a job now:** `hermes -p berghain cron run bh_daily`.
+  ⚠️ On the launchd (no-gateway) setup the tick only evaluates jobs when launchd
+  wakes, so change the wake time in the plist too — otherwise the job fires at
+  the next scheduled wake, not its own cron time.
+- **Counts:** the `_fetch_hot(...)` limits and the `limit=` in the feed URLs in
+  `berghain_common.py`.
+- **Test a job now:** `hermes -p berghain cron run <job_id>`.
