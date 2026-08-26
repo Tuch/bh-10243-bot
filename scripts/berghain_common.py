@@ -16,7 +16,6 @@ feeds are spaced and retried on HTTP 429.
 """
 import json
 import os
-import re
 import time
 import urllib.error
 import urllib.request
@@ -25,13 +24,12 @@ from datetime import datetime, timezone
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36")
-NEW_FEEDS = [
-    ("search: berghain (new)",
-     "https://www.reddit.com/search.rss?q=berghain&sort=new&limit=25"),
-    ("r/Berghain (new)",
-     "https://www.reddit.com/r/Berghain/new/.rss?limit=25"),
-]
-HOT_URL = "https://www.reddit.com/search.rss?q=berghain&sort=top&t={window}&limit=15"
+# Only the Berghain subreddit family. The old global q=berghain search pulled in
+# unrelated subs (r/harrystyles, r/BerlinNightlife, r/SearchEnginePodcast, …), so
+# it's gone — both Hot and New now come from these subs only.
+SUBREDDITS = ["Berghain", "Berghain_Community"]
+NEW_URL = "https://www.reddit.com/r/{sub}/new/.rss?limit=25"
+HOT_URL = "https://www.reddit.com/r/{sub}/top/.rss?t={window}&limit=15"
 
 MAX_AGE_HOURS = 26          # recency window for the NEW section
 TITLE_MAX = 90              # truncate long titles
@@ -108,9 +106,21 @@ def is_recent(updated, hours):
         return True
 
 
-def subreddit_of(link):
-    m = re.search(r"/r/([A-Za-z0-9_]+)/", link or "")
-    return f"r/{m.group(1)}" if m else "reddit"
+def rel_time(updated):
+    """Compact relative age for the item suffix: 'только что' / '45м' / '3ч' / '2д'."""
+    try:
+        dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+        secs = (datetime.now(timezone.utc) - dt).total_seconds()
+    except Exception:
+        return ""
+    mins = int(secs // 60)
+    if mins < 1:
+        return "только что"
+    if mins < 60:
+        return f"{mins}м"
+    if mins < 24 * 60:
+        return f"{mins // 60}ч"
+    return f"{mins // (24 * 60)}д"
 
 
 def clip(title):
@@ -119,58 +129,83 @@ def clip(title):
     return title if len(title) <= TITLE_MAX else title[:TITLE_MAX - 1].rstrip() + "…"
 
 
-def render(it):
-    author = it.get("author", "").lstrip("/")           # "/u/name" -> "u/name"
-    meta = subreddit_of(it["link"])
-    if author:
-        meta += f" · {author}"
-    return [f"• [{clip(it['title'])}]({it['link']})", f"  {meta}"]
+def line(it, prefix):
+    """One clickable line: '<prefix> [title](url) · 3ч'. Author/sub are omitted to
+    keep the single-subreddit-family digest clean."""
+    age = rel_time(it.get("updated", ""))
+    suffix = f" · {age}" if age else ""
+    return f"{prefix} [{clip(it['title'])}]({it['link']}){suffix}"
 
 
-def _fetch_hot(window, limit, max_age_h, errors):
-    hot, links = [], set()
-    for it in fetch_feed("hot", HOT_URL.format(window=window), errors=errors):
-        if not it["link"] or it["link"] in links:
-            continue
-        if not is_recent(it["updated"], max_age_h):
-            continue
-        links.add(it["link"])
-        hot.append(it)
-        if len(hot) >= limit:
-            break
-    return hot, links
+def _merge_round_robin(per_sub, limit):
+    """Interleave each subreddit's top list so neither sub dominates the Hot
+    section. RSS carries no score, so cross-sub ranking isn't possible — this at
+    least keeps both subs represented instead of front-loading the first one."""
+    out, i = [], 0
+    while len(out) < limit and any(i < len(lst) for lst in per_sub):
+        for lst in per_sub:
+            if i < len(lst):
+                out.append(lst[i])
+                if len(out) >= limit:
+                    break
+        i += 1
+    return out
+
+
+def _fetch_hot(window, limit, max_age_h, errors, calls):
+    per_sub, links = [], set()
+    for sub in SUBREDDITS:
+        gap = calls[0] > 0
+        calls[0] += 1
+        picks = []
+        for it in fetch_feed(f"r/{sub} (hot)",
+                             HOT_URL.format(sub=sub, window=window),
+                             errors=errors, gap=gap):
+            if not it["link"] or it["link"] in links:
+                continue
+            if not is_recent(it["updated"], max_age_h):
+                continue
+            links.add(it["link"])
+            picks.append(it)
+        per_sub.append(picks)
+    return _merge_round_robin(per_sub, limit), links
 
 
 def header(mode):
-    # Tag + date so the digests are easy to find via Telegram search
-    # (e.g. search "#berghain", "#weekly", or "2026-08-17").
-    today = datetime.now().strftime("%Y-%m-%d")
+    # 🏛 + date + hashtags so the digests are easy to find via Telegram search
+    # (e.g. search "#berghain", "#weekly", or "26 Aug").
+    today = datetime.now().strftime("%-d %b")
     if mode == "weekly":
-        return ["Berghain on Reddit · week", f"#berghain #weekly · {today}", ""]
-    return ["Berghain on Reddit", f"#berghain #daily · {today}", ""]
+        return [f"\U0001F3DB Berghain on Reddit · неделя · {today}",
+                "#berghain #weekly", ""]
+    return [f"\U0001F3DB Berghain on Reddit · {today}", "#berghain #daily", ""]
 
 
 def run(mode):
     errors = []
+    calls = [0]   # network-call counter for gentle inter-feed spacing
 
     if mode == "weekly":
         # Weekly roundup: top of the week only, no dedup (does not touch seen).
-        hot, _ = _fetch_hot("week", 10, 24 * 10, errors)
+        hot, _ = _fetch_hot("week", 10, 24 * 10, errors, calls)
         if not hot:
             return   # silent
         lines = header("weekly") + ["\U0001F525 Hot this week"]
-        for it in hot:
-            lines += render(it)
+        for i, it in enumerate(hot, 1):
+            lines.append(line(it, f"{i}."))
         print("\n".join(lines).rstrip())
         return
 
     # --- daily -------------------------------------------------------------
     seen = load_seen()
-    hot, hot_links = _fetch_hot("day", 5, 24 * 2, errors)
+    hot, hot_links = _fetch_hot("day", 5, 24 * 2, errors, calls)
 
     new_items = []
-    for name, url in NEW_FEEDS:
-        for it in fetch_feed(name, url, errors=errors, gap=True):
+    for sub in SUBREDDITS:
+        gap = calls[0] > 0
+        calls[0] += 1
+        for it in fetch_feed(f"r/{sub} (new)", NEW_URL.format(sub=sub),
+                             errors=errors, gap=gap):
             if not it["id"] or it["id"] in seen:
                 continue
             seen.add(it["id"])                          # mark seen even if filtered
@@ -187,11 +222,11 @@ def run(mode):
     lines = header("daily")
     if hot:
         lines.append("\U0001F525 Hot today")
-        for it in hot:
-            lines += render(it)
+        for i, it in enumerate(hot, 1):
+            lines.append(line(it, f"{i}."))
         lines.append("")
     if new_items:
         lines.append(f"\U0001F195 New ({len(new_items)})")
         for it in new_items:
-            lines += render(it)
+            lines.append(line(it, "•"))
     print("\n".join(lines).rstrip())
