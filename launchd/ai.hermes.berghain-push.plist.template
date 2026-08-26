@@ -6,8 +6,10 @@
     sed "s|__HOME__|$HOME|g" ai.hermes.berghain-push.plist.template \
       > ~/Library/LaunchAgents/ai.hermes.berghain-push.plist
     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.hermes.berghain-push.plist
-  Fires `hermes -p berghain cron tick` daily at 09:00; the tick runs whichever
-  job is due (daily every day, weekly on Mondays). No gateway process stays up.
+  Fires `hermes -p berghain cron tick` on Saturdays at 18:00; the tick runs
+  whichever job is due (the weekly roundup). No gateway process stays up.
+  Add more <dict> entries under StartCalendarInterval to wake at other times
+  (e.g. Hour 9 daily) if you re-enable the daily job.
 -->
 <plist version="1.0">
 <dict>
@@ -23,8 +25,10 @@
     </array>
     <key>StartCalendarInterval</key>
     <dict>
+        <key>Weekday</key>
+        <integer>6</integer>
         <key>Hour</key>
-        <integer>9</integer>
+        <integer>18</integer>
         <key>Minute</key>
         <integer>0</integer>
     </dict>
